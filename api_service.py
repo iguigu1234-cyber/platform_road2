@@ -1,5 +1,5 @@
 # =================================================================
-# api_service.py - API連携ロジック（安定化修正版）
+# api_service.py - DRM & 地理院API連携（不具合解析強化版）
 # =================================================================
 import requests
 import streamlit as st
@@ -29,21 +29,25 @@ class RoadAPIService:
         headers = {"Authorization": f"Basic {self.gsi_auth}"}
         params = {"lat": lat, "lon": lon}
         try:
-            res = requests.get(self.jartic_gsi_url, params=params, headers=headers, timeout=5)
-            return res.json() if res.status_code == 200 else None
-        except: return None
+            res = requests.get(self.jartic_gsi_url, params=params, headers=headers, timeout=7)
+            if res.status_code == 200: return res.json()
+            return {"error": f"GSI HTTP {res.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
 
     def fetch_drm_data_vba(self, token, lat, lon):
         url = f"{self.base_url}/API/Link/GetNearestLink.php"
         params = {"point_x": lat, "point_y": lon, "distance_marker_kind": 1, "response_geodata": "geojson/object"}
         headers = {"TOKEN-KEY": token}
         try:
-            res = requests.get(url, params=params, headers=headers, timeout=5)
-            return res.json() if res.status_code == 200 else None
-        except: return None
+            res = requests.get(url, params=params, headers=headers, timeout=7)
+            if res.status_code == 200: return res.json()
+            return {"error": f"DRM HTTP {res.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
 
     def calculate_extension(self):
-        """延長自動算定ロジックの安定化"""
+        """延長自動算定"""
         try:
             s_kp_str = str(st.session_state.get("始点キロポスト", "0"))
             e_kp_str = str(st.session_state.get("終点キロポスト", "0"))
@@ -54,10 +58,12 @@ class RoadAPIService:
         except: pass
 
     def update_info_from_apis(self, lat, lon, prefix="始点"):
+        """APIから取得したデータを反映。エラー時はトーストで通知。"""
         token = st.session_state.get("drm_token")
-        gsi = self.fetch_address_jartic_gsi(lat, lon)
         
-        if gsi:
+        # 1. 地理院プロキシ取得
+        gsi = self.fetch_address_jartic_gsi(lat, lon)
+        if gsi and "error" not in gsi:
             st.session_state[f"{prefix}住所"] = gsi.get("title", "")
             if prefix == "始点" and "feature" in gsi:
                 props = gsi["feature"].get("properties", {})
@@ -65,7 +71,10 @@ class RoadAPIService:
                 st.session_state["県名"] = pref
                 st.session_state["市町村名"] = props.get("muni", "")
                 st.session_state["整備局名"] = constants.PREF_TO_BUREAU.get(pref, "")
+        elif gsi:
+            st.toast(f"住所取得失敗: {gsi.get('error')}")
 
+        # 2. DRM属性取得
         if token:
             drm = self.fetch_drm_data_vba(token, lat, lon)
             if drm and "geo_data" in drm:
@@ -79,6 +88,8 @@ class RoadAPIService:
                     st.session_state["始点キロポスト"] = str(round(float(drm.get("distance_from_starting_point", 0))/1000.0, 3))
                 else:
                     st.session_state["終点キロポスト"] = str(round(float(drm.get("distance_from_starting_point", 0))/1000.0, 3))
+            elif drm:
+                st.toast(f"道路属性失敗: {drm.get('error')}")
         
         self.calculate_extension()
 
