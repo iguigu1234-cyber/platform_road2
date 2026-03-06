@@ -1,0 +1,26 @@
+name: Keep Multiple Streamlit Apps Awake
+
+on:
+  schedule:
+    # 日本時間の 9:00, 15:00, 21:00, 3:00 に自動実行
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Actionsタブから手動で実行可能にします
+
+jobs:
+  ping_apps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ping to Apps
+        run: |
+          # 1つ目のアプリ（例: https://my-app1.streamlit.app/）
+          curl -I https://platformroad2-wlyzi2hiypbncesd8yyx9q.streamlit.app/
+          
+          # 2つ目のアプリ（例: https://my-app2.streamlit.app/）
+          curl -I https://my-jartic-app-cjxyuqz6kfvfaa2xxhfhgh.streamlit.app/
+          
+          # 3つ目のアプリ（例: https://my-app3.streamlit.app/）
+          curl -I https://road-consultation-app-vc5etwmzjrgni8zgp6seul.streamlit.app/
+
+　　　　　　# 4つ目のアプリ（例: https://my-app3.streamlit.app/）
+          curl -I https://ri2maps-app-mlsmfzqnbdkaengohbxwwg.streamlit.app/
+          
